@@ -49,7 +49,7 @@ func (s *Server) Ping(ctx context.Context) error {
 	}
 
 	// Check if the response contains the expected message
-	var pingResp map[string]interface{}
+	var pingResp map[string]any
 	if err := json.Unmarshal(body, &pingResp); err != nil {
 		return fmt.Errorf("failed to parse ping response: %w", err)
 	}
@@ -65,7 +65,7 @@ func (s *Server) Ping(ctx context.Context) error {
 
 // Register registers a new user
 func (s *Server) Register(ctx context.Context, username, password, nickname, email, phoneNumber string) (*UserInfo, error) {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"username":     username,
 		"password":     password,
 		"nickname":     nickname,
@@ -96,7 +96,7 @@ func (s *Server) Register(ctx context.Context, username, password, nickname, ema
 
 // Login authenticates a user and returns user information
 func (s *Server) Login(ctx context.Context, username, password string) (*User, *UserInfo, error) {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"username": username,
 		"password": password,
 	}
@@ -108,9 +108,9 @@ func (s *Server) Login(ctx context.Context, username, password string) (*User, *
 	defer resp.Body.Close()
 
 	var response struct {
-		Result    Result   `json:"result"`
-		Session   string   `json:"session"`
-		UserInfo  UserInfo `json:"user_info"`
+		Result   Result   `json:"result"`
+		Session  string   `json:"session"`
+		UserInfo UserInfo `json:"user_info"`
 	}
 	if err := s.client.parseResponse(resp, &response); err != nil {
 		return nil, nil, fmt.Errorf("failed to parse login response: %w", err)

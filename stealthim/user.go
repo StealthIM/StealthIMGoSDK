@@ -60,7 +60,7 @@ func (u *User) GetUserInfo(ctx context.Context, username string) (*UserInfo, err
 
 // ChangePassword updates the user's password
 func (u *User) ChangePassword(ctx context.Context, newPassword string) error {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"password": newPassword,
 	}
 
@@ -86,7 +86,7 @@ func (u *User) ChangePassword(ctx context.Context, newPassword string) error {
 
 // ChangeEmail updates the user's email
 func (u *User) ChangeEmail(ctx context.Context, newEmail string) error {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"email": newEmail,
 	}
 
@@ -112,7 +112,7 @@ func (u *User) ChangeEmail(ctx context.Context, newEmail string) error {
 
 // ChangeNickname updates the user's nickname
 func (u *User) ChangeNickname(ctx context.Context, newNickname string) error {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"nickname": newNickname,
 	}
 
@@ -138,7 +138,7 @@ func (u *User) ChangeNickname(ctx context.Context, newNickname string) error {
 
 // ChangePhoneNumber updates the user's phone number
 func (u *User) ChangePhoneNumber(ctx context.Context, newPhoneNumber string) error {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"phone_number": newPhoneNumber,
 	}
 
@@ -164,7 +164,7 @@ func (u *User) ChangePhoneNumber(ctx context.Context, newPhoneNumber string) err
 
 // UpdateInfo updates multiple user fields at once
 func (u *User) UpdateInfo(ctx context.Context, password, email, nickname, phoneNumber string) error {
-	reqBody := map[string]interface{}{}
+	reqBody := map[string]any{}
 	if password != "" {
 		reqBody["password"] = password
 	}

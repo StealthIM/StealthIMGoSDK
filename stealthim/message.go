@@ -8,7 +8,7 @@ import (
 
 // SendMessage sends a text message to the group
 func (g *Group) SendMessage(ctx context.Context, msgType MessageType, content string) error {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"type": int(msgType),
 		"msg":  content,
 	}
@@ -36,8 +36,8 @@ func (g *Group) SendMessage(ctx context.Context, msgType MessageType, content st
 
 // RecallMessage recalls/deletes a message
 func (g *Group) RecallMessage(ctx context.Context, messageID string) error {
-	reqBody := map[string]interface{}{
-		"type": int(Recall_Text),
+	reqBody := map[string]any{
+		"type": int(RecallText),
 		"msg":  messageID,
 	}
 

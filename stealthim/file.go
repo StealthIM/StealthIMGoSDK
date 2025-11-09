@@ -5,8 +5,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"lukechampine.com/blake3"
@@ -17,12 +19,19 @@ func (g *Group) SendFile(ctx context.Context, filename, filepath string) error {
 	// Connect to the WebSocket endpoint
 	// Convert HTTP/HTTPS URL to WebSocket URL
 	var wsURL string
-	if g.client.BaseURL[:5] == "https" {
-		wsURL = "wss" + g.client.BaseURL[5:] + "/api/v1/file"
+	if len(g.client.BaseURL) >= 8 && g.client.BaseURL[:8] == "https://" {
+		wsURL = "wss" + g.client.BaseURL[5:] + "/api/v1/file/"
+	} else if len(g.client.BaseURL) >= 7 && g.client.BaseURL[:7] == "http://" {
+		wsURL = "ws" + g.client.BaseURL[4:] + "/api/v1/file/"
 	} else {
-		wsURL = "ws" + g.client.BaseURL[4:] + "/api/v1/file"
+		// 如果不是标准格式，尝试直接替换
+		if len(g.client.BaseURL) >= 5 && g.client.BaseURL[:5] == "https" {
+			wsURL = "wss" + g.client.BaseURL[5:] + "/api/v1/file/"
+		} else {
+			wsURL = "ws" + g.client.BaseURL[4:] + "/api/v1/file/"
+		}
 	}
-	
+
 	// Add authorization as query parameter if available
 	if g.client.Session != "" {
 		// Parse URL and add authorization parameter
@@ -30,21 +39,19 @@ func (g *Group) SendFile(ctx context.Context, filename, filepath string) error {
 		if err != nil {
 			return fmt.Errorf("failed to parse WebSocket URL: %w", err)
 		}
-		
+
 		// Add authorization parameter
 		q := u.Query()
 		q.Set("authorization", g.client.Session)
 		u.RawQuery = q.Encode()
-		
+
 		wsURL = u.String()
 	}
 
-	// Attempt to connect to the WebSocket
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to connect to WebSocket: %w", err)
-	}
-	defer conn.Close()
+	// 准备 WebSocket 请求头
+	headers := make(http.Header)
+	headers.Set("User-Agent", "StealthIM-GoSDK/1.0")
+	headers.Set("Origin", g.client.BaseURL)
 
 	// Open the file
 	file, err := os.Open(filepath)
@@ -70,11 +77,22 @@ func (g *Group) SendFile(ctx context.Context, filename, filepath string) error {
 
 	// Prepare metadata
 	metadata := FileMetadata{
-		Size:     fileSize,
-		GroupID:  g.GroupID,
+		Size:     fmt.Sprintf("%d", fileSize),
+		GroupID:  fmt.Sprintf("%d", g.GroupID),
 		Hash:     hash,
 		Filename: filename,
 	}
+
+	// 设置超时上下文
+	dialer := websocket.DefaultDialer
+	dialer.HandshakeTimeout = 10 * time.Second
+
+	// Attempt to connect to the WebSocket
+	conn, _, err := dialer.Dial(wsURL, headers)
+	if err != nil {
+		return fmt.Errorf("failed to connect to WebSocket: %w", err)
+	}
+	defer conn.Close()
 
 	// Send metadata
 	if err := conn.WriteJSON(metadata); err != nil {

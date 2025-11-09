@@ -51,7 +51,7 @@ func NewClientFromEnv() *Client {
 }
 
 // doRequest performs an HTTP request with proper headers and session management
-func (c *Client) doRequest(ctx context.Context, method, endpoint string, body interface{}) (*http.Response, error) {
+func (c *Client) doRequest(ctx context.Context, method, endpoint string, body any) (*http.Response, error) {
 	url := c.BaseURL + endpoint
 
 	var bodyReader io.Reader
@@ -85,7 +85,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 }
 
 // parseResponse parses the JSON response into the provided result structure
-func (c *Client) parseResponse(resp *http.Response, result interface{}) error {
+func (c *Client) parseResponse(resp *http.Response, result any) error {
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)

@@ -36,20 +36,22 @@ type Message struct {
 // MessageType represents the type of message
 type MessageType int
 
+// Message types
 const (
-	Text        MessageType = 0
-	Image       MessageType = 1
-	LargeEmoji  MessageType = 2
-	Emoji       MessageType = 3
-	File        MessageType = 4
-	Card        MessageType = 5
-	InnerLink   MessageType = 6
-	Recall_Text MessageType = 16
+	Text       MessageType = 0  // Text message
+	Image      MessageType = 1  // Image message
+	LargeEmoji MessageType = 2  // Large emoji message
+	Emoji      MessageType = 3  // Emoji message
+	File       MessageType = 4  // File message
+	Card       MessageType = 5  // Card message
+	InnerLink  MessageType = 6  // Inner link message
+	RecallText MessageType = 16 // Recall text message
 )
 
 // GroupMemberType represents the type of group member
 type GroupMemberType int
 
+// Group member types
 const (
 	Member  GroupMemberType = 0
 	Manager GroupMemberType = 1
@@ -58,8 +60,8 @@ const (
 
 // FileMetadata represents file metadata for upload
 type FileMetadata struct {
-	Size     int64  `json:"size"`
-	GroupID  int64  `json:"groupid"`
+	Size     string `json:"size"`
+	GroupID  string `json:"groupid"`
 	Hash     string `json:"hash"`
 	Filename string `json:"filename"`
 }

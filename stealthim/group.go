@@ -13,7 +13,7 @@ type Group struct {
 
 // Create creates a new group
 func (g *Group) Create(ctx context.Context, user *User, groupName string) (*Group, error) {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"name": groupName,
 	}
 
@@ -43,7 +43,7 @@ func (g *Group) Create(ctx context.Context, user *User, groupName string) (*Grou
 
 // Join joins a group with a password
 func (g *Group) Join(ctx context.Context, password string) error {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"password": password,
 	}
 
@@ -118,7 +118,7 @@ func (g *Group) GetInfo(ctx context.Context) ([]GroupMember, error) {
 
 // Invite invites a user to the group
 func (g *Group) Invite(ctx context.Context, username string) error {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"username": username,
 	}
 
@@ -145,7 +145,7 @@ func (g *Group) Invite(ctx context.Context, username string) error {
 
 // SetMemberRole sets a user's role in the group
 func (g *Group) SetMemberRole(ctx context.Context, username string, role GroupMemberType) error {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"username": username,
 		"type":     int(role),
 	}
@@ -173,7 +173,7 @@ func (g *Group) SetMemberRole(ctx context.Context, username string, role GroupMe
 
 // Kick removes a user from the group
 func (g *Group) Kick(ctx context.Context, username string) error {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"username": username,
 	}
 
@@ -200,7 +200,7 @@ func (g *Group) Kick(ctx context.Context, username string) error {
 
 // ChangeName changes the group name
 func (g *Group) ChangeName(ctx context.Context, newName string) error {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"name": newName,
 	}
 
@@ -227,7 +227,7 @@ func (g *Group) ChangeName(ctx context.Context, newName string) error {
 
 // ChangePassword changes the group password
 func (g *Group) ChangePassword(ctx context.Context, newPassword string) error {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"password": newPassword,
 	}
 
