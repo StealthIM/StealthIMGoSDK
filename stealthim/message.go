@@ -1,9 +1,13 @@
 package stealthim
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 )
 
 // SendMessage sends a text message to the group
@@ -64,71 +68,178 @@ func (g *Group) RecallMessage(ctx context.Context, messageID string) error {
 
 // ReceiveMessageOptions holds options for receiving messages
 type ReceiveMessageOptions struct {
-	FromID string
-	Sync   bool
-	Limit  int
+	MsgID string // 消息ID，用于从特定消息开始拉取
 }
 
 // DefaultReceiveMessageOptions returns default options for receiving messages
 func DefaultReceiveMessageOptions() *ReceiveMessageOptions {
 	return &ReceiveMessageOptions{
-		FromID: "",
-		Sync:   false,
-		Limit:  100,
+		MsgID: "",
 	}
 }
 
 // ReceiveMessages receives messages from the group via Server-Sent Events (SSE)
-// This is a simplified implementation - a full implementation would require proper SSE handling
 func (g *Group) ReceiveMessages(ctx context.Context, opts *ReceiveMessageOptions) (<-chan Message, <-chan error) {
 	messageChan := make(chan Message)
 	errorChan := make(chan error, 1)
 
 	// Build query parameters
-	queryParams := "?"
-	if opts.FromID != "" {
-		queryParams += fmt.Sprintf("from_id=%s&", opts.FromID)
+	queryParams := ""
+	if opts.MsgID != "" {
+		queryParams = fmt.Sprintf("?msgid=%s", opts.MsgID)
 	}
-	queryParams += fmt.Sprintf("sync=%t&", opts.Sync)
-	queryParams += fmt.Sprintf("limit=%d", opts.Limit)
 
 	endpoint := fmt.Sprintf("/api/v1/message/%d%s", g.GroupID, queryParams)
 
-	// In a real implementation, this would properly handle Server-Sent Events
-	// For now, we'll provide a basic structure that shows the intended API
 	go func() {
 		defer close(messageChan)
 		defer close(errorChan)
 
-		// This is a simplified placeholder implementation
-		// A full implementation would need to properly handle SSE streams
-		req, err := http.NewRequestWithContext(ctx, "GET", g.client.BaseURL+endpoint, nil)
-		if err != nil {
-			errorChan <- fmt.Errorf("failed to create request: %w", err)
-			return
-		}
+		// Retry logic: attempt up to 3 times
+		maxRetries := 3
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			// Check if context was cancelled
+			select {
+			case <-ctx.Done():
+				errorChan <- ctx.Err()
+				return
+			default:
+			}
 
-		// Set authorization header
-		if g.client.Session != "" {
-			req.Header.Set("Authorization", "Bearer "+g.client.Session)
-		}
+			// Create HTTP request
+			req, err := http.NewRequestWithContext(ctx, "GET", g.client.BaseURL+endpoint, nil)
+			if err != nil {
+				errorChan <- fmt.Errorf("failed to create request: %w", err)
+				return
+			}
 
-		// Note: This is simplified - a real implementation would need to properly handle SSE
-		// For now, we'll just make a regular GET request to demonstrate the concept
-		resp, err := g.client.HTTPClient.Do(req)
-		if err != nil {
-			errorChan <- fmt.Errorf("failed to execute request: %w", err)
-			return
-		}
-		defer resp.Body.Close()
+			// Set authorization header
+			if g.client.Session != "" {
+				req.Header.Set("Authorization", "Bearer "+g.client.Session)
+			}
 
-		if resp.StatusCode != http.StatusOK {
-			errorChan <- fmt.Errorf("request failed with status: %d", resp.StatusCode)
-			return
-		}
+			// Set Accept header for SSE
+			req.Header.Set("Accept", "text/event-stream")
+			req.Header.Set("Cache-Control", "no-cache")
+			req.Header.Set("Connection", "keep-alive")
 
-		// In a real implementation, we would parse the SSE stream here
-		// This is just a placeholder to indicate the intended functionality
+			// Execute request
+			resp, err := g.client.HTTPClient.Do(req)
+			if err != nil {
+				// If this was the last attempt, return the error
+				if attempt == maxRetries-1 {
+					errorChan <- fmt.Errorf("failed to execute request after %d attempts: %w", maxRetries, err)
+					return
+				}
+				// Otherwise, continue to next attempt
+				continue
+			}
+
+			// Check response status
+			if resp.StatusCode != http.StatusOK {
+				resp.Body.Close()
+				// If this was the last attempt, return the error
+				if attempt == maxRetries-1 {
+					errorChan <- fmt.Errorf("request failed with status: %d after %d attempts", resp.StatusCode, maxRetries)
+					return
+				}
+				// Otherwise, continue to next attempt
+				continue
+			}
+
+			// Create a buffered reader for the response body
+			reader := bufio.NewReader(resp.Body)
+
+			// Process SSE stream
+			for {
+				// Check if context was cancelled
+				select {
+				case <-ctx.Done():
+					resp.Body.Close()
+					errorChan <- ctx.Err()
+					return
+				default:
+				}
+
+				// Read a line from the stream
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					resp.Body.Close()
+					// Check if it's EOF (end of stream) - this might be normal
+					if err.Error() == "EOF" {
+						// For SSE streams, EOF can be normal after receiving all messages
+						// If we've reached max attempts and still getting EOF, return normally
+						if attempt == maxRetries-1 {
+							return // Normal end of stream
+						} else {
+							// Retry the connection
+							break // Break inner loop to retry connection
+						}
+					}
+					// If this was the last attempt, return the error
+					if attempt == maxRetries-1 {
+						errorChan <- fmt.Errorf("failed to read from stream after %d attempts: %w", maxRetries, err)
+						return
+					}
+					// Otherwise, continue to next attempt
+					break // Break inner loop to retry connection
+				}
+
+				// Trim whitespace
+				line = strings.TrimSpace(line)
+
+				// Skip empty lines and comments
+				if line == "" || strings.HasPrefix(line, ":") {
+					continue
+				}
+
+				// Handle SSE data field
+				if strings.HasPrefix(line, "data: ") {
+					data := strings.TrimPrefix(line, "data: ")
+
+					// Parse the JSON response
+					var response struct {
+						Result Result    `json:"result"`
+						Msg    []Message `json:"msg"`
+					}
+
+					if err := json.Unmarshal([]byte(data), &response); err != nil {
+						errorChan <- fmt.Errorf("failed to parse message: %w", err)
+						continue
+					}
+
+					// Check if the response is successful
+					if !response.Result.IsSuccess() {
+						resp.Body.Close()
+						errorChan <- response.Result.ToError()
+						return
+					}
+
+					// Send each message to the channel
+					for _, msg := range response.Msg {
+						select {
+						case messageChan <- msg:
+						case <-ctx.Done():
+							resp.Body.Close()
+							errorChan <- ctx.Err()
+							return
+						}
+					}
+				}
+			}
+
+			// If we reach this point, we had a connection issue and need to retry
+			// Wait briefly before retrying (except on the last attempt)
+			if attempt < maxRetries-1 {
+				select {
+				case <-time.After(1 * time.Second): // Wait 1 second before retry
+				case <-ctx.Done():
+					errorChan <- ctx.Err()
+					return
+				}
+			}
+			// Continue to the next attempt in the loop
+		}
 	}()
 
 	return messageChan, errorChan

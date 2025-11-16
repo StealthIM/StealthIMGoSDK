@@ -123,15 +123,69 @@ func TestClientDownloadFile(t *testing.T) {
 		t.Fatalf("Failed to login: %v", err)
 	}
 
+	// Create a group
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+
+	group := &Group{}
+	newGroup, err := group.Create(ctx, user, "Test Group")
+	if err != nil {
+		t.Fatalf("Failed to create group: %v", err)
+	}
+	_ = newGroup
+
+	// Create a temporary file for testing
+	tmpFile, err := os.CreateTemp("", "test_file_*.txt")
+	if err != nil {
+		t.Fatalf("Failed to create temporary file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name()) // Clean up after test
+	// Write some test data to the file
+	testData := "This is test data for file transfer"
+	_, err = tmpFile.WriteString(testData)
+	if err != nil {
+		t.Fatalf("Failed to write to temporary file: %v", err)
+	}
+	tmpFile.Close()
+	hash, err := calculateBlake3Hash(tmpFile.Name())
+
+	// Test sending the file
+	// Note: This test requires a working server connection
+	// It may fail if the server is not accessible or has issues
+	t.Logf("Attempting to send file to group %d", newGroup.GroupID)
+	err = newGroup.SendFile(ctx, "test_file.txt", tmpFile.Name())
+	if err != nil {
+		// We're not asserting failure here because the test might fail due to server issues
+		// rather than code issues
+		t.Logf("SendFile returned error (may be due to server issues): %v", err)
+		// 报告测试失败
+		t.Fail()
+	}
+
+	time.Sleep(2 * time.Second)
 	// Test downloading a file (with a dummy hash)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// This will likely fail with a "file not found" error, which is expected
 	// We're just testing that the method can be called
-	err = user.client.DownloadFile(ctx, "dummyhash", "/tmp/output.txt", 4)
-	if err == nil {
-		t.Error("Expected error for dummy hash")
+	t.Logf("Attempting to download file from group %d", newGroup.GroupID)
+	err = user.client.DownloadFile(ctx, hash, "/tmp/output.txt", 4)
+	if err != nil {
+		t.Errorf("Unexpected error: %v\n", err)
+		t.Fail()
+		return
+	}
+	// check file is same
+	data, err := os.ReadFile("/tmp/output.txt")
+	if err != nil {
+		t.Fatalf("Failed to read downloaded file: %v", err)
+		return
+	}
+	if string(data) != testData {
+		t.Errorf("Downloaded file content does not match original file content: %s", string(data))
+		t.Fail()
+		return
 	}
 }
 
@@ -156,17 +210,80 @@ func TestClientGetFileInfo(t *testing.T) {
 		t.Fatalf("Failed to login: %v", err)
 	}
 
-	// Test getting file info (with a dummy hash)
+	// Create a group
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	group := &Group{}
+	newGroup, err := group.Create(ctx, user, "Test Group")
+	if err != nil {
+		t.Fatalf("Failed to create group: %v", err)
+	}
+	_ = newGroup
+
+	// Create a temporary file for testing
+	tmpFile, err := os.CreateTemp("", "test_file_*.txt")
+	if err != nil {
+		t.Fatalf("Failed to create temporary file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name()) // Clean up after test
+
+	// Write some test data to the file
+	testData := "This is test data for file transfer"
+	_, err = tmpFile.WriteString(testData)
+	if err != nil {
+		t.Fatalf("Failed to write to temporary file: %v", err)
+	}
+	tmpFile.Close()
+
+	// Test sending the file
+	// Note: This test requires a working server connection
+	// It may fail if the server is not accessible or has issues
+	t.Logf("Attempting to send file to group %d", newGroup.GroupID)
+	err = newGroup.SendFile(ctx, "test_file.txt", tmpFile.Name())
+	if err != nil {
+		// We're not asserting failure here because the test might fail due to server issues
+		// rather than code issues
+		t.Logf("SendFile returned error (may be due to server issues): %v", err)
+		// 报告测试失败
+		t.Fail()
+	}
+
+	// Test getting file info (with a dummy hash)
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Test the hash calculation function
+	hash, err := calculateBlake3Hash(tmpFile.Name())
+	if err != nil {
+		t.Errorf("calculateBlake3Hash failed: %v", err)
+		t.Fail()
+		return
+	}
 
 	// This will likely fail with a "file not found" error, which is expected
 	// We're just testing that the method can be called
 	size, err := user.client.GetFileInfo(ctx, "dummyhash")
 	if err == nil {
 		t.Error("Expected error for dummy hash")
+		t.Fail()
+		return
 	}
 	if size != 0 {
 		t.Error("Expected size to be 0 for non-existent file")
+		t.Fail()
+		return
+	}
+
+	size, err = user.client.GetFileInfo(ctx, hash)
+	if err != nil {
+		t.Error("Expected error for dummy hash")
+		t.Fail()
+		return
+	}
+	if size == 0 {
+		t.Error("Expected size to be 0 for existented file")
+		t.Fail()
+		return
 	}
 }

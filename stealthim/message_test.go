@@ -164,6 +164,9 @@ func TestReceiveMessages(t *testing.T) {
 		t.Error("Expected channels to be non-nil")
 	}
 
+	// Set a message ID for testing
+	opts.MsgID = "0"
+
 	// Close channels to avoid goroutine leak
 	closeChannels(ctx)
 }
@@ -181,13 +184,7 @@ func closeChannels(ctx context.Context) {
 // TestDefaultReceiveMessageOptions tests the DefaultReceiveMessageOptions function
 func TestDefaultReceiveMessageOptions(t *testing.T) {
 	opts := DefaultReceiveMessageOptions()
-	if opts.FromID != "" {
-		t.Error("Expected FromID to be empty")
-	}
-	if opts.Sync != false {
-		t.Error("Expected Sync to be false")
-	}
-	if opts.Limit != 100 {
-		t.Error("Expected Limit to be 100")
+	if opts.MsgID != "" {
+		t.Error("Expected MsgID to be empty")
 	}
 }
